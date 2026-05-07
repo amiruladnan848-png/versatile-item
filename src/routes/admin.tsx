@@ -127,9 +127,13 @@ function ProductsAdmin() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
-    if (error) toast.error("পণ্য লোড করতে সমস্যা: " + error.message);
-    setList(data || []);
+    try {
+      const data = await listAdminProducts({ data: { pin: getAdminPin() } });
+      setList(data as Tables<"products">[]);
+    } catch (error) {
+      toast.error("পণ্য লোড করতে সমস্যা: " + (error instanceof Error ? error.message : "আবার চেষ্টা করুন"));
+      setList([]);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -152,16 +156,21 @@ function ProductsAdmin() {
     if (!form.name.trim() || !form.price || !form.image_url) return toast.error("নাম, দাম ও ছবি দিন");
     if (!CATEGORY_KEYS.includes(form.category as any)) return toast.error("সঠিক ক্যাটেগরি নির্বাচন করুন");
     setSaving(true);
-    const { error } = await supabase.from("products").insert({
+    try {
+      await createAdminProduct({ data: {
+        pin: getAdminPin(),
       name: form.name.trim(),
       description: form.description.trim() || null,
       price: Number(form.price),
       image_url: form.image_url,
-      category: form.category,
+        category: form.category as "cap" | "watch" | "sunglasses",
       stock: Number(form.stock || 0),
-    });
+      } });
+    } catch (error) {
+      setSaving(false);
+      return toast.error(error instanceof Error ? error.message : "পণ্য যোগ হয়নি");
+    }
     setSaving(false);
-    if (error) return toast.error(error.message);
     toast.success("পণ্য যোগ হয়েছে");
     setForm({ name: "", description: "", price: "", image_url: "", category: "cap", stock: "10" });
     load();
@@ -169,8 +178,11 @@ function ProductsAdmin() {
 
   const del = async (id: string) => {
     if (!confirm("ডিলিট করবেন?")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    try {
+      await deleteAdminProduct({ data: { pin: getAdminPin(), id } });
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : "ডিলিট হয়নি");
+    }
     toast.success("ডিলিট হয়েছে");
     load();
   };
