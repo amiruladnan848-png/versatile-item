@@ -3,10 +3,10 @@ import { useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useCart, BKASH_NUMBERS, CONFIRM_FEE } from "@/lib/store";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Copy, Check } from "lucide-react";
+import { createOrder } from "@/lib/shop.functions";
 
 export const Route = createFileRoute("/checkout")({ component: CheckoutPage });
 
@@ -44,13 +44,17 @@ function CheckoutPage() {
     const parsed = schema.safeParse(form);
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     setSubmitting(true);
-    const { error } = await supabase.from("orders").insert({
-      ...parsed.data,
-      items: items as any,
-      total: total + CONFIRM_FEE,
-    });
+    try {
+      await createOrder({ data: {
+        ...parsed.data,
+        items,
+        total: total + CONFIRM_FEE,
+      } });
+    } catch (error) {
+      setSubmitting(false);
+      return toast.error("অর্ডার করতে সমস্যা: " + (error instanceof Error ? error.message : "আবার চেষ্টা করুন"));
+    }
     setSubmitting(false);
-    if (error) return toast.error("অর্ডার করতে সমস্যা: " + error.message);
     clear();
     toast.success("অর্ডার সফলভাবে গ্রহণ করা হয়েছে!");
     nav({ to: "/order-success" });

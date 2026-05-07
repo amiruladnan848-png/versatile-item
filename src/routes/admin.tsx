@@ -2,16 +2,29 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { CATEGORIES } from "@/lib/store";
 import { toast } from "sonner";
-import { Lock, Plus, Trash2, Package, ClipboardList } from "lucide-react";
+import { Camera, ClipboardList, Loader2, Lock, Package, Plus, Trash2 } from "lucide-react";
+import { createAdminProduct, deleteAdminProduct, listAdminOrders, listAdminProducts, updateAdminOrderStatus } from "@/lib/shop.functions";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
 const ADMIN_PIN = "808090";
 const SESSION_KEY = "vies_admin_ok";
+const PIN_KEY = "vies_admin_pin";
+const CATEGORY_KEYS = CATEGORIES.map((c) => c.key);
+
+const getAdminPin = () => (typeof window === "undefined" ? "" : sessionStorage.getItem(PIN_KEY) || "");
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("ছবি পড়তে সমস্যা হয়েছে"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -27,6 +40,7 @@ function AdminPage() {
     e.preventDefault();
     if (pin === ADMIN_PIN) {
       sessionStorage.setItem(SESSION_KEY, "1");
+      sessionStorage.setItem(PIN_KEY, pin);
       setAuthed(true);
     } else {
       toast.error("ভুল পিন");
@@ -75,7 +89,7 @@ function AdminDashboard() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-extrabold">অ্যাডমিন প্যানেল</h1>
           <button
-            onClick={() => { sessionStorage.removeItem(SESSION_KEY); location.reload(); }}
+            onClick={() => { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(PIN_KEY); location.reload(); }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             লগআউট
@@ -105,25 +119,60 @@ function TabBtn({ active, onClick, icon, children }: any) {
 
 function ProductsAdmin() {
   const [list, setList] = useState<Tables<"products">[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "", description: "", price: "", image_url: "", category: "cap", stock: "10",
   });
 
-  const load = () => supabase.from("products").select("*").order("created_at", { ascending: false }).then(({ data }) => setList(data || []));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await listAdminProducts({ data: { pin: getAdminPin() } });
+      setList(data as Tables<"products">[]);
+    } catch (error) {
+      toast.error("পণ্য লোড করতে সমস্যা: " + (error instanceof Error ? error.message : "আবার চেষ্টা করুন"));
+      setList([]);
+    }
+    setLoading(false);
+  };
   useEffect(() => { load(); }, []);
+
+  const pickImage = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("শুধু ছবি আপলোড করুন");
+    if (file.size > 900_000) return toast.error("ছবির সাইজ 900KB এর কম দিন");
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setForm((current) => ({ ...current, image_url: dataUrl }));
+      toast.success("ছবি যুক্ত হয়েছে");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ছবি যুক্ত হয়নি");
+    }
+  };
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.price || !form.image_url) return toast.error("নাম, দাম ও ছবির লিংক দিন");
-    const { error } = await supabase.from("products").insert({
-      name: form.name,
-      description: form.description || null,
-      price: Number(form.price),
-      image_url: form.image_url,
-      category: form.category,
-      stock: Number(form.stock || 0),
-    });
-    if (error) return toast.error(error.message);
+    if (!form.name.trim() || !form.price || !form.image_url) return toast.error("নাম, দাম ও ছবি দিন");
+    if (!CATEGORY_KEYS.includes(form.category as any)) return toast.error("সঠিক ক্যাটেগরি নির্বাচন করুন");
+    setSaving(true);
+    try {
+      await createAdminProduct({
+        data: {
+          pin: getAdminPin(),
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          price: Number(form.price),
+          image_url: form.image_url,
+          category: form.category as "cap" | "watch" | "sunglasses",
+          stock: Number(form.stock || 0),
+        },
+      });
+    } catch (error) {
+      setSaving(false);
+      return toast.error(error instanceof Error ? error.message : "পণ্য যোগ হয়নি");
+    }
+    setSaving(false);
     toast.success("পণ্য যোগ হয়েছে");
     setForm({ name: "", description: "", price: "", image_url: "", category: "cap", stock: "10" });
     load();
@@ -131,15 +180,18 @@ function ProductsAdmin() {
 
   const del = async (id: string) => {
     if (!confirm("ডিলিট করবেন?")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    try {
+      await deleteAdminProduct({ data: { pin: getAdminPin(), id } });
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : "ডিলিট হয়নি");
+    }
     toast.success("ডিলিট হয়েছে");
     load();
   };
 
   return (
     <div className="grid lg:grid-cols-[400px_1fr] gap-6">
-      <form onSubmit={add} className="rounded-2xl border border-border bg-card p-6 space-y-3 h-fit">
+      <form onSubmit={add} className="rounded-2xl border border-border bg-card p-6 space-y-3 h-fit shadow-brand animate-float-up">
         <h2 className="font-bold text-lg flex items-center gap-2"><Plus className="size-4" /> নতুন পণ্য যোগ করুন</h2>
         <Inp label="পণ্যের নাম" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <div>
@@ -154,7 +206,20 @@ function ProductsAdmin() {
         </div>
         <Inp label="দাম (৳)" value={form.price} onChange={(v) => setForm({ ...form, price: v })} type="number" />
         <Inp label="স্টক" value={form.stock} onChange={(v) => setForm({ ...form, stock: v })} type="number" />
-        <Inp label="ছবির লিংক (URL)" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} placeholder="https://..." />
+        <div>
+          <label className="text-sm font-semibold mb-1 block">পণ্যের ছবি</label>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-primary/50 bg-secondary/60 px-3 py-4 text-sm font-bold text-primary transition-all hover:-translate-y-0.5 hover:shadow-glow">
+            <Camera className="size-4" /> ছবি আপলোড করুন
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => pickImage(e.target.files?.[0])} />
+          </label>
+          {form.image_url && <img src={form.image_url} alt="নতুন পণ্যের প্রিভিউ" className="mt-3 aspect-square w-full rounded-xl object-cover bg-secondary" />}
+          <input
+            value={form.image_url.startsWith("data:") ? "" : form.image_url}
+            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+            placeholder="অথবা ছবির URL দিন"
+            className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
         <div>
           <label className="text-sm font-semibold mb-1 block">বিবরণ</label>
           <textarea
@@ -164,13 +229,17 @@ function ProductsAdmin() {
             className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
           />
         </div>
-        <button className="w-full rounded-full py-3 font-bold gradient-brand text-primary-foreground shadow-brand">
-          যোগ করুন
+        <button disabled={saving} className="w-full rounded-full py-3 font-bold gradient-brand text-primary-foreground shadow-brand disabled:opacity-60 inline-flex items-center justify-center gap-2">
+          {saving && <Loader2 className="size-4 animate-spin" />} যোগ করুন
         </button>
       </form>
       <div>
         <h2 className="font-bold text-lg mb-3">সব পণ্য ({list.length})</h2>
-        {list.length === 0 ? (
+        {loading ? (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 rounded-2xl bg-secondary animate-pulse" />)}
+          </div>
+        ) : list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground rounded-2xl border border-dashed border-border">কোনো পণ্য নেই।</div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-3">
@@ -196,13 +265,27 @@ function ProductsAdmin() {
 
 function OrdersAdmin() {
   const [list, setList] = useState<Tables<"orders">[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => supabase.from("orders").select("*").order("created_at", { ascending: false }).then(({ data }) => setList(data || []));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await listAdminOrders({ data: { pin: getAdminPin() } });
+      setList(data as Tables<"orders">[]);
+    } catch (error) {
+      toast.error("অর্ডার লোড করতে সমস্যা: " + (error instanceof Error ? error.message : "আবার চেষ্টা করুন"));
+      setList([]);
+    }
+    setLoading(false);
+  };
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-    if (error) return toast.error(error.message);
+    try {
+      await updateAdminOrderStatus({ data: { pin: getAdminPin(), id, status: status as "pending" | "confirmed" | "shipped" | "delivered" | "cancelled" } });
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : "আপডেট হয়নি");
+    }
     toast.success("আপডেট হয়েছে");
     load();
   };
@@ -210,7 +293,11 @@ function OrdersAdmin() {
   return (
     <div>
       <h2 className="font-bold text-lg mb-3">সব অর্ডার ({list.length})</h2>
-      {list.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-36 rounded-2xl bg-secondary animate-pulse" />)}
+        </div>
+      ) : list.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground rounded-2xl border border-dashed border-border">কোনো অর্ডার নেই।</div>
       ) : (
         <div className="space-y-3">
@@ -228,9 +315,9 @@ function OrdersAdmin() {
                 </div>
               </div>
               <details className="mt-3">
-                <summary className="text-sm cursor-pointer text-primary">পণ্য সমূহ দেখুন ({(o.items as any[]).length})</summary>
+                <summary className="text-sm cursor-pointer text-primary">পণ্য সমূহ দেখুন ({Array.isArray(o.items) ? o.items.length : 0})</summary>
                 <ul className="mt-2 text-sm space-y-1">
-                  {(o.items as any[]).map((i, idx) => (
+                  {(Array.isArray(o.items) ? o.items : []).map((i: any, idx) => (
                     <li key={idx}>• {i.name} × {i.qty} = ৳{i.qty * i.price}</li>
                   ))}
                 </ul>
