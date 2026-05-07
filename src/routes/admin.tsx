@@ -267,16 +267,23 @@ function OrdersAdmin() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
-    if (error) toast.error("অর্ডার লোড করতে সমস্যা: " + error.message);
-    setList(data || []);
+    try {
+      const data = await listAdminOrders({ data: { pin: getAdminPin() } });
+      setList(data as Tables<"orders">[]);
+    } catch (error) {
+      toast.error("অর্ডার লোড করতে সমস্যা: " + (error instanceof Error ? error.message : "আবার চেষ্টা করুন"));
+      setList([]);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-    if (error) return toast.error(error.message);
+    try {
+      await updateAdminOrderStatus({ data: { pin: getAdminPin(), id, status: status as "pending" | "confirmed" | "shipped" | "delivered" | "cancelled" } });
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : "আপডেট হয়নি");
+    }
     toast.success("আপডেট হয়েছে");
     load();
   };
