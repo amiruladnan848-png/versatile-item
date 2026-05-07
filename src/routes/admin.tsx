@@ -2,17 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { CATEGORIES } from "@/lib/store";
 import { toast } from "sonner";
 import { Camera, ClipboardList, Loader2, Lock, Package, Plus, Trash2 } from "lucide-react";
+import { createAdminProduct, deleteAdminProduct, listAdminOrders, listAdminProducts, updateAdminOrderStatus } from "@/server/shop.functions";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
 const ADMIN_PIN = "808090";
 const SESSION_KEY = "vies_admin_ok";
+const PIN_KEY = "vies_admin_pin";
 const CATEGORY_KEYS = CATEGORIES.map((c) => c.key);
+
+const getAdminPin = () => (typeof window === "undefined" ? "" : sessionStorage.getItem(PIN_KEY) || "");
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -37,6 +40,7 @@ function AdminPage() {
     e.preventDefault();
     if (pin === ADMIN_PIN) {
       sessionStorage.setItem(SESSION_KEY, "1");
+      sessionStorage.setItem(PIN_KEY, pin);
       setAuthed(true);
     } else {
       toast.error("ভুল পিন");
