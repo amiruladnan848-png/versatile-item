@@ -247,8 +247,15 @@ function ProductsAdmin() {
 
 function OrdersAdmin() {
   const [list, setList] = useState<Tables<"orders">[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => supabase.from("orders").select("*").order("created_at", { ascending: false }).then(({ data }) => setList(data || []));
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    if (error) toast.error("অর্ডার লোড করতে সমস্যা: " + error.message);
+    setList(data || []);
+    setLoading(false);
+  };
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id: string, status: string) => {
@@ -261,7 +268,11 @@ function OrdersAdmin() {
   return (
     <div>
       <h2 className="font-bold text-lg mb-3">সব অর্ডার ({list.length})</h2>
-      {list.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-36 rounded-2xl bg-secondary animate-pulse" />)}
+        </div>
+      ) : list.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground rounded-2xl border border-dashed border-border">কোনো অর্ডার নেই।</div>
       ) : (
         <div className="space-y-3">
@@ -279,9 +290,9 @@ function OrdersAdmin() {
                 </div>
               </div>
               <details className="mt-3">
-                <summary className="text-sm cursor-pointer text-primary">পণ্য সমূহ দেখুন ({(o.items as any[]).length})</summary>
+                <summary className="text-sm cursor-pointer text-primary">পণ্য সমূহ দেখুন ({Array.isArray(o.items) ? o.items.length : 0})</summary>
                 <ul className="mt-2 text-sm space-y-1">
-                  {(o.items as any[]).map((i, idx) => (
+                  {(Array.isArray(o.items) ? o.items : []).map((i: any, idx) => (
                     <li key={idx}>• {i.name} × {i.qty} = ৳{i.qty * i.price}</li>
                   ))}
                 </ul>
