@@ -89,7 +89,7 @@ function AdminDashboard() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-extrabold">অ্যাডমিন প্যানেল</h1>
           <button
-            onClick={() => { sessionStorage.removeItem(SESSION_KEY); location.reload(); }}
+            onClick={() => { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(PIN_KEY); location.reload(); }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             লগআউট
@@ -157,15 +157,17 @@ function ProductsAdmin() {
     if (!CATEGORY_KEYS.includes(form.category as any)) return toast.error("সঠিক ক্যাটেগরি নির্বাচন করুন");
     setSaving(true);
     try {
-      await createAdminProduct({ data: {
-        pin: getAdminPin(),
-      name: form.name.trim(),
-      description: form.description.trim() || null,
-      price: Number(form.price),
-      image_url: form.image_url,
-        category: form.category as "cap" | "watch" | "sunglasses",
-      stock: Number(form.stock || 0),
-      } });
+      await createAdminProduct({
+        data: {
+          pin: getAdminPin(),
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          price: Number(form.price),
+          image_url: form.image_url,
+          category: form.category as "cap" | "watch" | "sunglasses",
+          stock: Number(form.stock || 0),
+        },
+      });
     } catch (error) {
       setSaving(false);
       return toast.error(error instanceof Error ? error.message : "পণ্য যোগ হয়নি");
