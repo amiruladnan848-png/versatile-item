@@ -173,7 +173,7 @@ function ProductsAdmin() {
 
   return (
     <div className="grid lg:grid-cols-[400px_1fr] gap-6">
-      <form onSubmit={add} className="rounded-2xl border border-border bg-card p-6 space-y-3 h-fit">
+      <form onSubmit={add} className="rounded-2xl border border-border bg-card p-6 space-y-3 h-fit shadow-brand animate-float-up">
         <h2 className="font-bold text-lg flex items-center gap-2"><Plus className="size-4" /> নতুন পণ্য যোগ করুন</h2>
         <Inp label="পণ্যের নাম" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <div>
@@ -188,7 +188,20 @@ function ProductsAdmin() {
         </div>
         <Inp label="দাম (৳)" value={form.price} onChange={(v) => setForm({ ...form, price: v })} type="number" />
         <Inp label="স্টক" value={form.stock} onChange={(v) => setForm({ ...form, stock: v })} type="number" />
-        <Inp label="ছবির লিংক (URL)" value={form.image_url} onChange={(v) => setForm({ ...form, image_url: v })} placeholder="https://..." />
+        <div>
+          <label className="text-sm font-semibold mb-1 block">পণ্যের ছবি</label>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-primary/50 bg-secondary/60 px-3 py-4 text-sm font-bold text-primary transition-all hover:-translate-y-0.5 hover:shadow-glow">
+            <Camera className="size-4" /> ছবি আপলোড করুন
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => pickImage(e.target.files?.[0])} />
+          </label>
+          {form.image_url && <img src={form.image_url} alt="নতুন পণ্যের প্রিভিউ" className="mt-3 aspect-square w-full rounded-xl object-cover bg-secondary" />}
+          <input
+            value={form.image_url.startsWith("data:") ? "" : form.image_url}
+            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+            placeholder="অথবা ছবির URL দিন"
+            className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
         <div>
           <label className="text-sm font-semibold mb-1 block">বিবরণ</label>
           <textarea
@@ -198,13 +211,17 @@ function ProductsAdmin() {
             className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
           />
         </div>
-        <button className="w-full rounded-full py-3 font-bold gradient-brand text-primary-foreground shadow-brand">
-          যোগ করুন
+        <button disabled={saving} className="w-full rounded-full py-3 font-bold gradient-brand text-primary-foreground shadow-brand disabled:opacity-60 inline-flex items-center justify-center gap-2">
+          {saving && <Loader2 className="size-4 animate-spin" />} যোগ করুন
         </button>
       </form>
       <div>
         <h2 className="font-bold text-lg mb-3">সব পণ্য ({list.length})</h2>
-        {list.length === 0 ? (
+        {loading ? (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 rounded-2xl bg-secondary animate-pulse" />)}
+          </div>
+        ) : list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground rounded-2xl border border-dashed border-border">কোনো পণ্য নেই।</div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-3">
