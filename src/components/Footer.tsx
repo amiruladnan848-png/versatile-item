@@ -35,8 +35,11 @@ export function Footer() {
           </a>
         </div>
       </div>
-      <div className="border-t border-border py-4 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Versatile Item E-Commerce Shop। সর্বস্বত্ব সংরক্ষিত।
+      <div className="border-t border-border px-4 py-5 text-center text-xs text-muted-foreground">
+        <div>© {new Date().getFullYear()} Versatile Item E-Commerce Shop। সর্বস্বত্ব সংরক্ষিত।</div>
+        <div className="mt-2 font-bold text-foreground">
+          Website Developer: <span className="developer-highlight">Amirul_Adnan</span>
+        </div>
       </div>
     </footer>
   );
