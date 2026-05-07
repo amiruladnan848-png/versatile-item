@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const pinSchema = z.object({ pin: z.string().length(6) });
 
@@ -31,19 +30,18 @@ const orderSchema = z.object({
   total: z.number().positive().max(2_000_000),
 });
 
-function requireAdminPin(pin: string) {
+async function adminClient(pin?: string) {
   const expectedPin = process.env.ADMIN_PIN || "808090";
-  if (pin !== expectedPin) throw new Error("অ্যাডমিন পিন সঠিক নয়");
+  if (pin !== undefined && pin !== expectedPin) throw new Error("অ্যাডমিন পিন সঠিক নয়");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
 }
 
 export const listAdminProducts = createServerFn({ method: "GET" })
   .inputValidator((data) => pinSchema.parse(data))
   .handler(async ({ data }) => {
-    requireAdminPin(data.pin);
-    const { data: products, error } = await supabaseAdmin
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const supabaseAdmin = await adminClient(data.pin);
+    const { data: products, error } = await supabaseAdmin.from("products").select("*").order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return products || [];
   });
@@ -51,7 +49,7 @@ export const listAdminProducts = createServerFn({ method: "GET" })
 export const createAdminProduct = createServerFn({ method: "POST" })
   .inputValidator((data) => productSchema.parse(data))
   .handler(async ({ data }) => {
-    requireAdminPin(data.pin);
+    const supabaseAdmin = await adminClient(data.pin);
     const { pin, ...product } = data;
     const { error } = await supabaseAdmin.from("products").insert(product);
     if (error) throw new Error(error.message);
@@ -61,7 +59,7 @@ export const createAdminProduct = createServerFn({ method: "POST" })
 export const deleteAdminProduct = createServerFn({ method: "POST" })
   .inputValidator((data) => pinSchema.extend({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
-    requireAdminPin(data.pin);
+    const supabaseAdmin = await adminClient(data.pin);
     const { error } = await supabaseAdmin.from("products").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -70,22 +68,16 @@ export const deleteAdminProduct = createServerFn({ method: "POST" })
 export const listAdminOrders = createServerFn({ method: "GET" })
   .inputValidator((data) => pinSchema.parse(data))
   .handler(async ({ data }) => {
-    requireAdminPin(data.pin);
-    const { data: orders, error } = await supabaseAdmin
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const supabaseAdmin = await adminClient(data.pin);
+    const { data: orders, error } = await supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return orders || [];
   });
 
 export const updateAdminOrderStatus = createServerFn({ method: "POST" })
-  .inputValidator((data) => pinSchema.extend({
-    id: z.string().uuid(),
-    status: z.enum(["pending", "confirmed", "shipped", "delivered", "cancelled"]),
-  }).parse(data))
+  .inputValidator((data) => pinSchema.extend({ id: z.string().uuid(), status: z.enum(["pending", "confirmed", "shipped", "delivered", "cancelled"]) }).parse(data))
   .handler(async ({ data }) => {
-    requireAdminPin(data.pin);
+    const supabaseAdmin = await adminClient(data.pin);
     const { error } = await supabaseAdmin.from("orders").update({ status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -94,6 +86,7 @@ export const updateAdminOrderStatus = createServerFn({ method: "POST" })
 export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((data) => orderSchema.parse(data))
   .handler(async ({ data }) => {
+    const supabaseAdmin = await adminClient();
     const { error } = await supabaseAdmin.from("orders").insert(data);
     if (error) throw new Error(error.message);
     return { ok: true };

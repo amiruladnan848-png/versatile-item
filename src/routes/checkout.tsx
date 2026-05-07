@@ -6,7 +6,7 @@ import { useCart, BKASH_NUMBERS, CONFIRM_FEE } from "@/lib/store";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Copy, Check } from "lucide-react";
-import { createOrder } from "@/server/shop.functions";
+import { createOrder } from "@/lib/shop.functions";
 
 export const Route = createFileRoute("/checkout")({ component: CheckoutPage });
 

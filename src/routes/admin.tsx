@@ -6,7 +6,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { CATEGORIES } from "@/lib/store";
 import { toast } from "sonner";
 import { Camera, ClipboardList, Loader2, Lock, Package, Plus, Trash2 } from "lucide-react";
-import { createAdminProduct, deleteAdminProduct, listAdminOrders, listAdminProducts, updateAdminOrderStatus } from "@/server/shop.functions";
+import { createAdminProduct, deleteAdminProduct, listAdminOrders, listAdminProducts, updateAdminOrderStatus } from "@/lib/shop.functions";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
