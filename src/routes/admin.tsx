@@ -6,12 +6,22 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { CATEGORIES } from "@/lib/store";
 import { toast } from "sonner";
-import { Lock, Plus, Trash2, Package, ClipboardList } from "lucide-react";
+import { Camera, ClipboardList, Loader2, Lock, Package, Plus, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
 const ADMIN_PIN = "808090";
 const SESSION_KEY = "vies_admin_ok";
+const CATEGORY_KEYS = CATEGORIES.map((c) => c.key);
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("ছবি পড়তে সমস্যা হয়েছে"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -105,24 +115,48 @@ function TabBtn({ active, onClick, icon, children }: any) {
 
 function ProductsAdmin() {
   const [list, setList] = useState<Tables<"products">[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "", description: "", price: "", image_url: "", category: "cap", stock: "10",
   });
 
-  const load = () => supabase.from("products").select("*").order("created_at", { ascending: false }).then(({ data }) => setList(data || []));
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+    if (error) toast.error("পণ্য লোড করতে সমস্যা: " + error.message);
+    setList(data || []);
+    setLoading(false);
+  };
   useEffect(() => { load(); }, []);
+
+  const pickImage = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("শুধু ছবি আপলোড করুন");
+    if (file.size > 900_000) return toast.error("ছবির সাইজ 900KB এর কম দিন");
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setForm((current) => ({ ...current, image_url: dataUrl }));
+      toast.success("ছবি যুক্ত হয়েছে");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ছবি যুক্ত হয়নি");
+    }
+  };
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.price || !form.image_url) return toast.error("নাম, দাম ও ছবির লিংক দিন");
+    if (!form.name.trim() || !form.price || !form.image_url) return toast.error("নাম, দাম ও ছবি দিন");
+    if (!CATEGORY_KEYS.includes(form.category as any)) return toast.error("সঠিক ক্যাটেগরি নির্বাচন করুন");
+    setSaving(true);
     const { error } = await supabase.from("products").insert({
-      name: form.name,
-      description: form.description || null,
+      name: form.name.trim(),
+      description: form.description.trim() || null,
       price: Number(form.price),
       image_url: form.image_url,
       category: form.category,
       stock: Number(form.stock || 0),
     });
+    setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("পণ্য যোগ হয়েছে");
     setForm({ name: "", description: "", price: "", image_url: "", category: "cap", stock: "10" });
